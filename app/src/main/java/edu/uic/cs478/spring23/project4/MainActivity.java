@@ -15,8 +15,10 @@ public class MainActivity extends AppCompatActivity {
     private static final int UPDATE_BOARD = 1;
     private static final int UPDATE_STATUS = 2;
     private static final int NEW_GAME = 3;
-    private Handler mHandler;
+    private static Handler mHandler;
     private Board mBoard;
+    private static Thread player1;
+    private static Thread player2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,25 +61,27 @@ public class MainActivity extends AppCompatActivity {
 //        });
     }
     private void updateBoard(int[] boardState) {
-        ImageView[] slots = new ImageView[9];
-        slots[0] = findViewById(R.id.slot1);
-        slots[1] = findViewById(R.id.slot2);
-        slots[2] = findViewById(R.id.slot3);
-        slots[3] = findViewById(R.id.slot4);
-        slots[4] = findViewById(R.id.slot5);
-        slots[5] = findViewById(R.id.slot6);
-        slots[6] = findViewById(R.id.slot7);
-        slots[7] = findViewById(R.id.slot8);
-        slots[8] = findViewById(R.id.slot9);
+        ImageView[][] slots = new ImageView[3][3];
+        slots[0][0] = findViewById(R.id.slot1);
+        slots[0][1] = findViewById(R.id.slot2);
+        slots[0][2] = findViewById(R.id.slot3);
+        slots[1][0] = findViewById(R.id.slot4);
+        slots[1][1] = findViewById(R.id.slot5);
+        slots[1][2] = findViewById(R.id.slot6);
+        slots[2][0] = findViewById(R.id.slot7);
+        slots[2][1] = findViewById(R.id.slot8);
+        slots[2][2] = findViewById(R.id.slot9);
 
-        for (int i = 0; i < 9; i++) {
-            int state = boardState[i];
-            if (state == Board.EMPTY) {
-                slots[i].setImageResource(R.drawable.empty_slot);
-            } else if (state == Board.RED) {
-                slots[i].setImageResource(R.drawable.red_piece);
-            } else if (state == Board.BLUE) {
-                slots[i].setImageResource(R.drawable.blue_piece);
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; i < 3; j++) {
+                int state = boardState[i];
+                if (state == Board.EMPTY) {
+                    slots[i][j].setImageResource(R.drawable.empty_slot);
+                } else if (state == Board.RED) {
+                    slots[i][j].setImageResource(R.drawable.red_piece);
+                } else if (state == Board.BLUE) {
+                    slots[i][j].setImageResource(R.drawable.blue_piece);
+                }
             }
         }
     }
