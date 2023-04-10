@@ -10,334 +10,175 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int UPDATE_BOARD = 1;
-    private static final int UPDATE_STATUS = 2;
-    private static final int NEW_GAME = 3;
-    private static Handler mHandler;
-    private Board mBoard;
+    private static ImageView[][] boardImage;
     private static Thread player1;
     private static Thread player2;
+    private static Button startBTN;
+    // The UI thread handler created
+    private Handler mHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case Board.MOVE_MADE:
+                    updateGame((PieceData) msg.obj, msg.arg1, msg.arg2);
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        // set the threads to null
+        player1 = null;
+        player2 = null;
+        // initialize the UI of imageview
+        boardImage = new ImageView[3][3];
+        boardImage[0][0] = (ImageView)findViewById(R.id.slot1);
+        boardImage[0][1] = (ImageView)findViewById(R.id.slot2);
+        boardImage[0][2] = (ImageView)findViewById(R.id.slot3);
+        boardImage[1][0] = (ImageView)findViewById(R.id.slot4);
+        boardImage[1][1] = (ImageView)findViewById(R.id.slot5);
+        boardImage[1][2] = (ImageView)findViewById(R.id.slot6);
+        boardImage[2][0] = (ImageView)findViewById(R.id.slot7);
+        boardImage[2][1] = (ImageView)findViewById(R.id.slot8);
+        boardImage[2][2] = (ImageView)findViewById(R.id.slot9);
 
-        mHandler = new Handler(Looper.getMainLooper()) {
-            @Override
-            public void handleMessage(Message msg) {
-                switch(msg.what) {
-                    case UPDATE_BOARD:
-                        updateBoard((int[]) msg.obj);
-                        break;
-                    case UPDATE_STATUS:
-                        updateStatus((String) msg.obj);
-                        break;
-                    case NEW_GAME:
-                        newGame();
-                        break;
-                }
-                // Handle the message from the worker threads here
-            }
-        };
-        mBoard = new Board();
-        updateBoard(mBoard.getBoardState());
-        updateStatus("To start a new game, click the New Game button.");
-
-        Button newGameButton = findViewById(R.id.new_game_button);
-        newGameButton.setOnClickListener(new View.OnClickListener() {
+        // initalize the new game button
+        startBTN = (Button)findViewById(R.id.new_game_button);
+        startBTN.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mHandler.sendEmptyMessage(NEW_GAME);
-            }
-        });
-//        runOnUiThread(new Runnable() {
-//            @Override
-//            public void run() {
-//                // Update the UI here
-//            }
-//        });
-    }
-    private void updateBoard(int[] boardState) {
-        ImageView[][] slots = new ImageView[3][3];
-        slots[0][0] = findViewById(R.id.slot1);
-        slots[0][1] = findViewById(R.id.slot2);
-        slots[0][2] = findViewById(R.id.slot3);
-        slots[1][0] = findViewById(R.id.slot4);
-        slots[1][1] = findViewById(R.id.slot5);
-        slots[1][2] = findViewById(R.id.slot6);
-        slots[2][0] = findViewById(R.id.slot7);
-        slots[2][1] = findViewById(R.id.slot8);
-        slots[2][2] = findViewById(R.id.slot9);
-
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; i < 3; j++) {
-                int state = boardState[i];
-                if (state == Board.EMPTY) {
-                    slots[i][j].setImageResource(R.drawable.empty_slot);
-                } else if (state == Board.RED) {
-                    slots[i][j].setImageResource(R.drawable.red_piece);
-                } else if (state == Board.BLUE) {
-                    slots[i][j].setImageResource(R.drawable.blue_piece);
+              // when new game is pressed again, the existing thread is deleted
+                if (player1 != null) {
+                    endThreads();
                 }
-            }
-        }
-    }
-    private void updateStatus(String status) {
-        TextView statusView = findViewById(R.id.status);
-        statusView.setText(status);
-    }
-
-    private void newGame() {
-        mBoard.newGame();
-        updateBoard(mBoard.getBoardState());
-        updateStatus("New game started.");
-    }
-}
-
-public class WorkerThread extends Thread {
-    private static final int MOVE = 1;
-    private static final int GAME_OVER = 2;
-
-    private Handler mHandler;
-    private Board mBoard;
-    private int mPlayer;
-    private boolean mGameOver;
-
-    public WorkerThread(Handler handler, Board board, int player) {
-        mHandler = handler;
-        mBoard = board;
-        mPlayer = player;
-        mGameOver = false;
-    }
-
-    @Override
-    public void run() {
-        while (!mGameOver) {
-            int[] move = getMove();
-            mBoard.makeMove(mPlayer, move[0], move[1]);
-            if (mBoard.checkWin(mPlayer)) {
-                mHandler.sendEmptyMessage(GAME_OVER);
-                mGameOver = true;
-            } else {
-                // Determine the next move
-                int nextMove = mCurrentPlayer == PLAYER_ONE ?
-                        mPlayerOne.getNextMove(mBoard) : mPlayerTwo.getNextMove(mBoard);
-            }
-            // Check if the move is valid
-            if (isValidMove(nextMove)) {
-                // Update the board
-                mBoard[nextMove] = mCurrentPlayer;
-
-                // Check for a win
-                if (isWinningMove(nextMove)) {
-                    // Send a message to the UI thread that the game is over
-                    mHandler.sendEmptyMessage(GAME_OVER);
-                    mGameOver = true;
-                } else {
-                    // Switch to the other player
-                    mCurrentPlayer = mCurrentPlayer == PLAYER_ONE ? PLAYER_TWO : PLAYER_ONE;
-
-                    // Send a message to the UI thread to update the display
-                    Message msg = mHandler.obtainMessage(UPDATE_BOARD, mBoard);
-                    mHandler.sendMessage(msg);
-
-                    // Send a message to the other player's thread to take its turn
-                    if (mCurrentPlayer == PLAYER_ONE) {
-                        mPlayerOneHandler.sendEmptyMessage(TAKE_TURN);
-                    } else {
-                        mPlayerTwoHandler.sendEmptyMessage(TAKE_TURN);
+                // creating a new board to start the game from fresh
+                new Board(mHandler);
+                // creating the thread of the players
+                player1 = new Thread(new PlayerOne());
+                player2 = new Thread(new PlayerTwo());
+                // clear the UI to blank spots
+                for (int i = 0; i < 3; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        boardImage[i][j].setImageResource(R.drawable.empty_slot);
                     }
                 }
-            } else {
-                // Send a message to the current player's thread to take its turn again
-                if (mCurrentPlayer == PLAYER_ONE) {
-                    mPlayerOneHandler.sendEmptyMessage(TAKE_TURN);
+                // reset the handler initialized to 0 until the new thread are finished
+                Board.handlerInit = 0;
+                // start the player threads
+                player1.start();
+                player2.start();
+                Toast.makeText(MainActivity.this, "New Game Start", Toast.LENGTH_SHORT).show();
+                // decide which player start first
+                int startingPlayer = new Random().nextInt(2);
+                // until the looper are finished initializing
+                while (Board.handlerInit < 2) ;
+                if (startingPlayer == 0) {
+                    PlayerOne.playerOne.sendMessage(PlayerOne.playerOne.obtainMessage(Board.MOVE_MADE));
                 } else {
-                    mPlayerTwoHandler.sendEmptyMessage(TAKE_TURN);
+                    PlayerTwo.playerTwo.sendMessage(PlayerTwo.playerTwo.obtainMessage(Board.MOVE_MADE));
                 }
             }
-        }
-    }
-    /**
-     * Checks if a move is valid.
-     */
-    private boolean isValidMove(int move) {
-        return mBoard[move] == EMPTY_SLOT;
+
+        });
+
     }
 
-    /**
-     * Checks if a move is a winning move.
-     */
-    private boolean isWinningMove(int move) {
-        // Check if the move creates a winning row
-        if (mBoard[move] == mBoard[getOppositeCorner(move)] && mBoard[move] == mBoard[getAdjacentSlot(move)]) {
-            return true;
+    private void updateGame(PieceData newPiece, int oldX, int oldY) {
+        // check if is existing piece
+        if (oldX != -1) {
+            boardImage[oldX][oldY].setImageResource(R.drawable.empty_slot);
         }
+        // get the new coordinates
+        int newX = newPiece.getX();
+        int newY = newPiece.getY();
 
-        // Check if the move creates a winning column
-        if (mBoard[move] == mBoard[getOppositeCorner(move)] && mBoard[move] == mBoard[getOppositeCorner(getAdjacentSlot(move))]) {
-            return true;
-        }
-
-        // Check if the move creates a winning diagonal
-        if (move % 2 == 0 && mBoard[move] == mBoard[4] && mBoard[move] == mBoard[getOppositeCorner(move)]) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Gets the opposite corner of a slot.
-     */
-    private int getOppositeCorner(int slot) {
-        switch (slot) {
-            case 0:
-                return 8;
-            case 2:
-                return 6;
-            case 6:
-                return 2;
-            case 8:
-                return 0;
-            default:
-                return -1;
-        }
-    }
-
-    /**
-     * Gets the adjacent slot of a slot.
-     */
-    private int getAdjacentSlot(int slot) {
-        switch (slot) {
-            case 0:
-                return 1;
-            case 1:
-                return 2;
-            case 2:
-                return 0;
-            case 3:
-                return 4;
-            case 4:
-                return 5;
-            case 5:
-                return 3;
-            case 6:
-                return 7;
-            case 7:
-                return 8;
-            case 8:
-                return 6;
-            default:
-                return -1;
-        }
-    }
-    private void handleMove(int slot) {
-        // get the current player
-        Player currentPlayer = mCurrentPlayer.get();
-
-        // move the piece
-        int currentSlot = currentPlayer.getSlot();
-        mBoard[currentSlot] = 0;
-        mBoard[slot] = currentPlayer.getId();
-        currentPlayer.setSlot(slot);
-
-        // check for a win
-        boolean hasWon = checkWin(currentPlayer.getId());
-        if (hasWon) {
-            Message message = mHandler.obtainMessage(GAME_OVER, currentPlayer);
-            mHandler.sendMessage(message);
-            mGameOver = true;
+        // placing the new piece to the different spot
+        if (newPiece.getID() == Board.RED) {
+            boardImage[newX][newY].setImageResource((R.drawable.red_piece));
         } else {
-            // check for a tie
-            boolean isTie = checkTie();
-            if (isTie) {
-                mHandler.sendEmptyMessage(GAME_OVER);
-                mGameOver = true;
+            boardImage[newX][newY].setImageResource((R.drawable.blue_piece));
+        }
+        // get the id to any possible winner
+        int id = checkForWinner();
+        // there's a winner so end the threads and declare the winner
+        if (id != -1) {
+            endThreads();
+            if (id == Board.BLUE) {
+                Toast.makeText(this, "Blue Won this Match!", Toast.LENGTH_SHORT).show();
             } else {
-                // switch to the other player
-                mCurrentPlayer.set(mPlayer1 == currentPlayer ? mPlayer2 : mPlayer1);
+                Toast.makeText(this, "Red Won this Match!", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+        // no winner so continue sending message to player one or two
+        if (newPiece.getID() == Board.RED) {
+            PlayerTwo.playerTwo.sendMessage(PlayerTwo.playerTwo.obtainMessage(Board.MOVE_MADE, oldX, oldY, newPiece));
+        } else {
+            PlayerOne.playerOne.sendMessage(PlayerOne.playerOne.obtainMessage(Board.MOVE_MADE, oldX, oldY, newPiece));
+        }
+    }
 
-                // determine the next move of the worker threads
-                if (currentPlayer == mPlayer1) {
-                    int nextMove = mPlayer1Strategy.getNextMove(mBoard, mPlayer1.getId(), mPlayer2.getId());
-                    Message message = mHandler.obtainMessage(PLAYER1_MOVE, nextMove);
-                    mHandler.sendMessage(message);
-                } else {
-                    int nextMove = mPlayer2Strategy.getNextMove(mBoard, mPlayer2.getId(), mPlayer1.getId());
-                    Message message = mHandler.obtainMessage(PLAYER2_MOVE, nextMove);
-                    mHandler.sendMessage(message);
+    private int checkForWinner() {
+        // get the current board
+        int[][] boardState = Board.getBoard();
+        // checking if the row or column have a three matching color and give the winner to their id
+        for (int i = 0; i < 3; i++) {
+            int idCol = boardState[i][0];
+            int idRow = boardState[0][i];
+            int horizontal = 0;
+            int vertical = 0;
+            for (int j = 0; j < 3; j++) {
+                if (boardState[i][j] == idCol) {
+                    horizontal++;
+                }
+                if (boardState[j][i] == idRow) {
+                    vertical++;
                 }
             }
-        }
-    }
-
-    private boolean checkWin(int player) {
-        // check for a win on rows
-        for (int i = 0; i < 9; i += 3) {
-            if (mBoard[i] == player && mBoard[i+1] == player && mBoard[i+2] == player) {
-                return true;
+            // find winner from horizontal
+            if (idCol != Board.EMPTY && horizontal == 3) {
+                return idCol;
             }
-        }
-
-        // check for a win on columns
-        for (int i = 0; i < 3; i++) {
-            if (mBoard[i] == player && mBoard[i+3] == player && mBoard[i+6] == player) {
-                return true;
+            // find winner from vertical
+            if (idRow != Board.EMPTY && vertical == 3) {
+                return idRow;
             }
-        }
 
-        // check for a win on diagonals
-        if (mBoard[0] == player && mBoard[4] == player && mBoard[8] == player) {
-            return true;
         }
-
-        if (mBoard[2] == player && mBoard[4] == player && mBoard[6] == player) {
-            return true;
-        }
-
-        return false;
+        return -1;
     }
 
-    private boolean checkTie() {
-        for (int i = 0; i < 9; i++) {
-            if (mBoard[i] == 0) {
-                return false;
+    private void endThreads() {
+        // end the player1 and player2 threads
+        PlayerOne.playerOne.post(new Runnable() {
+            @Override
+            public void run() {
+                PlayerOne.endLooper();
             }
-        }
-        return true;
-    }
-}
-private class WorkerThreadHandler extends Handler {
-    @Override
-    public void handleMessage(Message msg) {
-        switch (msg.what) {
-            case MSG_MAKE_MOVE:
-                int move = getNextMove();
-                Message moveMsg = mUiHandler.obtainMessage(MSG_WORKER_MOVE, move);
-                mUiHandler.sendMessage(moveMsg);
-                break;
-        }
-    }
-
-    private int getNextMove() {
-        // Implement your strategy to determine the next move
-        // Return the move as an integer
-    }
-}
-private class UiThreadHandler extends Handler {
-    @Override
-    public void handleMessage(Message msg) {
-        switch (msg.what) {
-            case MSG_WORKER_MOVE:
-                int move = (int) msg.obj;
-                makeMove(move);
-                checkForWin();
-                break;
-        }
+        });
+        while (player1.isAlive());
+        PlayerTwo.playerTwo.post(new Runnable() {
+            @Override
+            public void run() {
+                PlayerTwo.endLooper();
+            }
+        });
+        while (player2.isAlive());
+        // set thread to null
+        player1 = null;
+        player2 = null;
+        // clear the handler queue
+        mHandler.removeCallbacksAndMessages(null);
     }
 }
 
